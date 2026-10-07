@@ -18,7 +18,7 @@
                BlueprintIdentifier = "000000000000000100000000"
                BuildableName = "MyApp.app"
                BlueprintName = "MyApp"
-               ReferencedContainer = "container:Untitled Project.xcodeproj">
+               ReferencedContainer = "container:AppleSpywareResearch.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -48,7 +48,7 @@
             BlueprintIdentifier = "000000000000000100000000"
             BuildableName = "MyApp.app"
             BlueprintName = "MyApp"
-            ReferencedContainer = "container:Untitled Project.xcodeproj">
+            ReferencedContainer = "container:AppleSpywareResearch.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -65,7 +65,7 @@
             BlueprintIdentifier = "000000000000000100000000"
             BuildableName = "MyApp.app"
             BlueprintName = "MyApp"
-            ReferencedContainer = "container:Untitled Project.xcodeproj">
+            ReferencedContainer = "container:AppleSpywareResearch.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
