@@ -1,11 +1,16 @@
 import AVFoundation
+import Combine
 import Contacts
 import CoreLocation
 import EventKit
 import Photos
+import SwiftUI
 
 @MainActor
 final class PermissionManager: NSObject, ObservableObject {
+
+    // MARK: - Permission Status
+
     @Published var cameraStatus = "Not Requested"
     @Published var microphoneStatus = "Not Requested"
     @Published var photosStatus = "Not Requested"
@@ -13,8 +18,23 @@ final class PermissionManager: NSObject, ObservableObject {
     @Published var locationStatus = "Not Requested"
     @Published var calendarStatus = "Not Requested"
 
+    // MARK: - Contacts Research
+
+    @Published var contactResults: [String] = []
+    @Published var contactsReadStatus = "Not Tested"
+    
+    // MARK: - Photos Research
+
+    @Published var photoResults: [String] = []
+    @Published var photosReadStatus = "Not Tested"
+
+    // MARK: - Managers
+
     private let locationManager = CLLocationManager()
     private let eventStore = EKEventStore()
+    private let contactStore = CNContactStore()
+
+    // MARK: - Initialization
 
     override init() {
         super.init()
@@ -24,34 +44,42 @@ final class PermissionManager: NSObject, ObservableObject {
         refreshStatuses()
     }
 
+    // MARK: - Permission Requests
+
     func requestCamera() {
-        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            Task { @MainActor in
-                self?.cameraStatus = granted ? "Granted" : "Denied"
-            }
+        Task {
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            cameraStatus = granted ? "Granted" : "Denied"
         }
     }
 
     func requestMicrophone() {
-        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-            Task { @MainActor in
-                self?.microphoneStatus = granted ? "Granted" : "Denied"
-            }
+        Task {
+            let granted = await AVCaptureDevice.requestAccess(for: .audio)
+            microphoneStatus = granted ? "Granted" : "Denied"
         }
     }
 
     func requestPhotos() {
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] status in
-            Task { @MainActor in
-                self?.photosStatus = self?.photoStatusText(status) ?? "Unknown"
-            }
+        Task {
+            let status = await PHPhotoLibrary.requestAuthorization(
+                for: .readWrite
+            )
+
+            photosStatus = photoStatusText(status)
         }
     }
 
     func requestContacts() {
-        CNContactStore().requestAccess(for: .contacts) { [weak self] granted, _ in
-            Task { @MainActor in
-                self?.contactsStatus = granted ? "Granted" : "Denied"
+        Task {
+            do {
+                let granted = try await contactStore.requestAccess(
+                    for: .contacts
+                )
+
+                contactsStatus = granted ? "Granted" : "Denied"
+            } catch {
+                contactsStatus = "Failed"
             }
         }
     }
@@ -61,28 +89,186 @@ final class PermissionManager: NSObject, ObservableObject {
     }
 
     func requestCalendar() {
-        eventStore.requestFullAccessToEvents { [weak self] granted, _ in
-            Task { @MainActor in
-                self?.calendarStatus = granted ? "Granted" : "Denied"
+        Task {
+            do {
+                let granted = try await eventStore.requestFullAccessToEvents()
+
+                calendarStatus = granted ? "Granted" : "Denied"
+            } catch {
+                calendarStatus = "Failed"
             }
         }
     }
 
+    // MARK: - Contacts Data Access Test
+
+    func readContacts() {
+        let authorizationStatus =
+            CNContactStore.authorizationStatus(for: .contacts)
+
+        guard authorizationStatus == .authorized else {
+            contactsReadStatus = "Permission Not Granted"
+            contactResults = []
+            return
+        }
+
+        contactsReadStatus = "Reading..."
+
+        Task {
+            do {
+                let results = try await Self.fetchContacts()
+
+                contactResults = results
+                contactsReadStatus =
+                    "Success - \(results.count) contact(s)"
+
+            } catch {
+                contactResults = []
+                contactsReadStatus =
+                    "Failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private nonisolated static func fetchContacts() async throws -> [String] {
+        try await Task.detached(priority: .userInitiated) {
+
+            let store = CNContactStore()
+
+            let keysToFetch: [CNKeyDescriptor] = [
+                CNContactGivenNameKey as CNKeyDescriptor,
+                CNContactFamilyNameKey as CNKeyDescriptor,
+                CNContactPhoneNumbersKey as CNKeyDescriptor,
+                CNContactEmailAddressesKey as CNKeyDescriptor
+            ]
+
+            let request = CNContactFetchRequest(
+                keysToFetch: keysToFetch
+            )
+
+            var results: [String] = []
+
+            try store.enumerateContacts(
+                with: request
+            ) { contact, _ in
+
+                let fullName =
+                    "\(contact.givenName) \(contact.familyName)"
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+
+                let phoneNumbers = contact.phoneNumbers.map {
+                    $0.value.stringValue
+                }
+
+                let emailAddresses = contact.emailAddresses.map {
+                    String($0.value)
+                }
+
+                var details =
+                    fullName.isEmpty ? "(No Name)" : fullName
+
+                if !phoneNumbers.isEmpty {
+                    details +=
+                        "\nPhone: \(phoneNumbers.joined(separator: ", "))"
+                }
+
+                if !emailAddresses.isEmpty {
+                    details +=
+                        "\nEmail: \(emailAddresses.joined(separator: ", "))"
+                }
+
+                results.append(details)
+            }
+
+            return results
+
+        }.value
+    }
+    
+    // MARK: - Photos Data Access Test
+
+    func readPhotos() {
+        let authorizationStatus =
+            PHPhotoLibrary.authorizationStatus(for: .readWrite)
+
+        guard authorizationStatus == .authorized ||
+              authorizationStatus == .limited else {
+            photosReadStatus = "Permission Not Granted"
+            photoResults = []
+            return
+        }
+
+        let assets = PHAsset.fetchAssets(with: nil)
+
+        var results: [String] = []
+
+        assets.enumerateObjects { asset, _, _ in
+
+            let mediaType: String
+
+            switch asset.mediaType {
+            case .image:
+                mediaType = "Image"
+
+            case .video:
+                mediaType = "Video"
+
+            case .audio:
+                mediaType = "Audio"
+
+            case .unknown:
+                mediaType = "Unknown"
+
+            @unknown default:
+                mediaType = "Unknown"
+            }
+
+            var details = mediaType
+
+            details +=
+                "\nDimensions: \(asset.pixelWidth) × \(asset.pixelHeight)"
+
+            if let creationDate = asset.creationDate {
+                details +=
+                    "\nCreated: \(creationDate.formatted())"
+            }
+
+            results.append(details)
+        }
+
+        photoResults = results
+        photosReadStatus =
+            "Success - \(results.count) asset(s)"
+    }
+
+    // MARK: - Refresh Permission Status
+
     func refreshStatuses() {
+
         cameraStatus = cameraStatusText(
-            AVCaptureDevice.authorizationStatus(for: .video)
+            AVCaptureDevice.authorizationStatus(
+                for: .video
+            )
         )
 
         microphoneStatus = microphoneStatusText(
-            AVCaptureDevice.authorizationStatus(for: .audio)
+            AVCaptureDevice.authorizationStatus(
+                for: .audio
+            )
         )
 
         photosStatus = photoStatusText(
-            PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            PHPhotoLibrary.authorizationStatus(
+                for: .readWrite
+            )
         )
 
         contactsStatus = contactStatusText(
-            CNContactStore.authorizationStatus(for: .contacts)
+            CNContactStore.authorizationStatus(
+                for: .contacts
+            )
         )
 
         locationStatus = locationStatusText(
@@ -90,116 +276,168 @@ final class PermissionManager: NSObject, ObservableObject {
         )
 
         calendarStatus = calendarStatusText(
-            EKEventStore.authorizationStatus(for: .event)
+            EKEventStore.authorizationStatus(
+                for: .event
+            )
         )
     }
+
+    // MARK: - Camera Status
 
     private func cameraStatusText(
         _ status: AVAuthorizationStatus
     ) -> String {
+
         switch status {
+
         case .authorized:
             return "Granted"
+
         case .denied:
             return "Denied"
+
         case .restricted:
             return "Restricted"
+
         case .notDetermined:
             return "Not Requested"
+
         @unknown default:
             return "Unknown"
         }
     }
+
+    // MARK: - Microphone Status
 
     private func microphoneStatusText(
         _ status: AVAuthorizationStatus
     ) -> String {
-        cameraStatusText(status)
+
+        return cameraStatusText(status)
     }
+
+    // MARK: - Photos Status
 
     private func photoStatusText(
         _ status: PHAuthorizationStatus
     ) -> String {
+
         switch status {
+
         case .authorized:
             return "Granted"
+
         case .limited:
             return "Limited"
+
         case .denied:
             return "Denied"
+
         case .restricted:
             return "Restricted"
+
         case .notDetermined:
             return "Not Requested"
+
         @unknown default:
             return "Unknown"
         }
     }
+
+    // MARK: - Contacts Status
 
     private func contactStatusText(
         _ status: CNAuthorizationStatus
     ) -> String {
+
         switch status {
+
         case .authorized:
             return "Granted"
+
         case .denied:
             return "Denied"
+
         case .restricted:
             return "Restricted"
+
         case .notDetermined:
             return "Not Requested"
+
+        case .limited:
+            return "Limited"
+
         @unknown default:
             return "Unknown"
         }
     }
+
+    // MARK: - Location Status
 
     private func locationStatusText(
         _ status: CLAuthorizationStatus
     ) -> String {
+
         switch status {
+
         case .authorizedWhenInUse:
             return "When In Use"
+
         case .authorizedAlways:
             return "Always"
+
         case .denied:
             return "Denied"
+
         case .restricted:
             return "Restricted"
+
         case .notDetermined:
             return "Not Requested"
+
         @unknown default:
             return "Unknown"
         }
     }
 
+    // MARK: - Calendar Status
+
     private func calendarStatusText(
         _ status: EKAuthorizationStatus
     ) -> String {
+
         switch status {
+
         case .fullAccess:
             return "Granted"
+
         case .writeOnly:
             return "Write Only"
+
         case .denied:
             return "Denied"
+
         case .restricted:
             return "Restricted"
+
         case .notDetermined:
             return "Not Requested"
+
         @unknown default:
             return "Unknown"
         }
     }
 }
 
+// MARK: - CLLocationManagerDelegate
+
 extension PermissionManager: CLLocationManagerDelegate {
+
     func locationManagerDidChangeAuthorization(
         _ manager: CLLocationManager
     ) {
-        Task { @MainActor in
-            locationStatus = locationStatusText(
-                manager.authorizationStatus
-            )
-        }
+        locationStatus = locationStatusText(
+            manager.authorizationStatus
+        )
     }
 }
