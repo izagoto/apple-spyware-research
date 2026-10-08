@@ -145,6 +145,39 @@ struct ContentView: View {
                         }
                     }
                 }
+                
+                // MARK: - Calendar Data Access
+
+                Section("Calendar Data Access") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Calendar Read Test")
+                                .font(.headline)
+
+                            Text(permissions.calendarReadStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Read Calendar") {
+                            permissions.readCalendar()
+                        }
+                    }
+
+                    if !permissions.calendarResults.isEmpty {
+                        ForEach(
+                            Array(permissions.calendarResults.enumerated()),
+                            id: \.offset
+                        ) { _, event in
+                            Text(event)
+                                .font(.callout)
+                                .textSelection(.enabled)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
             }
             .navigationTitle("Permission Research")
             .toolbar {

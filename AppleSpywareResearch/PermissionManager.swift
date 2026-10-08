@@ -33,6 +33,11 @@ final class PermissionManager: NSObject, ObservableObject {
 
     @Published var locationResults: [String] = []
     @Published var locationReadStatus = "Not Tested"
+    
+    // MARK: - Calendar Research
+
+    @Published var calendarResults: [String] = []
+    @Published var calendarReadStatus = "Not Tested"
 
     // MARK: - Managers
 
@@ -251,6 +256,69 @@ final class PermissionManager: NSObject, ObservableObject {
         locationResults = []
 
         locationManager.requestLocation()
+    }
+    
+    // MARK: - Calendar Data Access Test
+
+    func readCalendar() {
+        let authorizationStatus =
+            EKEventStore.authorizationStatus(for: .event)
+
+        guard authorizationStatus == .fullAccess else {
+            calendarReadStatus = "Permission Not Granted"
+            calendarResults = [
+                "Grant full Calendar access before reading."
+            ]
+            return
+        }
+
+        calendarReadStatus = "Reading..."
+        calendarResults = []
+
+        let calendar = Calendar.current
+
+        guard
+            let startDate = calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: Date()
+            ),
+            let endDate = calendar.date(
+                byAdding: .day,
+                value: 30,
+                to: Date()
+            )
+        else {
+            calendarReadStatus = "Failed"
+            calendarResults = [
+                "Unable to create research date range."
+            ]
+            return
+        }
+
+        let predicate = eventStore.predicateForEvents(
+            withStart: startDate,
+            end: endDate,
+            calendars: nil
+        )
+
+        let events = eventStore.events(matching: predicate)
+
+        calendarResults = events.map { event in
+            var details = event.title ?? "(No Title)"
+
+            details += "\nStart: \(event.startDate.formatted())"
+            details += "\nEnd: \(event.endDate.formatted())"
+
+            if let calendarTitle = event.calendar?.title {
+                details += "\nCalendar: \(calendarTitle)"
+            }
+
+            return details
+        }
+
+        calendarReadStatus =
+            "Success - \(events.count) event(s)"
     }
 
     // MARK: - Refresh Permission Status
