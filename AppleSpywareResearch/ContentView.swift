@@ -178,6 +178,72 @@ struct ContentView: View {
                         }
                     }
                 }
+                
+                // MARK: - Camera Capability
+
+                Section("Camera Capability") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Camera Capability Test")
+                                .font(.headline)
+
+                            Text(permissions.cameraTestStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Test Camera") {
+                            permissions.testCameraCapability()
+                        }
+                    }
+
+                    if !permissions.cameraResults.isEmpty {
+                        ForEach(
+                            Array(permissions.cameraResults.enumerated()),
+                            id: \.offset
+                        ) { _, result in
+                            Text(result)
+                                .font(.callout)
+                                .textSelection(.enabled)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
+                
+                // MARK: - Microphone Capability
+
+                Section("Microphone Capability") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Microphone Capability Test")
+                                .font(.headline)
+
+                            Text(permissions.microphoneTestStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Test Microphone") {
+                            permissions.testMicrophoneCapability()
+                        }
+                    }
+
+                    if !permissions.microphoneResults.isEmpty {
+                        ForEach(
+                            Array(permissions.microphoneResults.enumerated()),
+                            id: \.offset
+                        ) { _, result in
+                            Text(result)
+                                .font(.callout)
+                                .textSelection(.enabled)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
             }
             .navigationTitle("Permission Research")
             .toolbar {

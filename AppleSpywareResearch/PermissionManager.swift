@@ -38,6 +38,16 @@ final class PermissionManager: NSObject, ObservableObject {
 
     @Published var calendarResults: [String] = []
     @Published var calendarReadStatus = "Not Tested"
+    
+    // MARK: - Camera Research
+
+    @Published var cameraTestStatus = "Not Tested"
+    @Published var cameraResults: [String] = []
+    
+    // MARK: - Microphone Research
+
+    @Published var microphoneTestStatus = "Not Tested"
+    @Published var microphoneResults: [String] = []
 
     // MARK: - Managers
 
@@ -319,6 +329,121 @@ final class PermissionManager: NSObject, ObservableObject {
 
         calendarReadStatus =
             "Success - \(events.count) event(s)"
+    }
+    
+    // MARK: - Camera Capability Test
+
+    func testCameraCapability() {
+        let authorizationStatus =
+            AVCaptureDevice.authorizationStatus(for: .video)
+
+        guard authorizationStatus == .authorized else {
+            cameraTestStatus = "Permission Not Granted"
+            cameraResults = [
+                "Camera permission must be granted before testing."
+            ]
+            return
+        }
+
+        cameraTestStatus = "Testing..."
+        cameraResults = []
+
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInWideAngleCamera
+            ],
+            mediaType: .video,
+            position: .unspecified
+        )
+
+        let devices = discoverySession.devices
+
+        guard !devices.isEmpty else {
+            cameraTestStatus = "No Camera Device"
+            cameraResults = [
+                "Camera permission: Granted",
+                "AVCaptureDevice detected: No",
+                "Environment: iOS Simulator",
+                "Result: Simulator camera hardware/input unavailable"
+            ]
+            return
+        }
+
+        cameraTestStatus = "Success - \(devices.count) device(s)"
+
+        cameraResults = devices.map { device in
+            """
+            Device: \(device.localizedName)
+            Position: \(cameraPositionText(device.position))
+            Connected: \(device.isConnected ? "Yes" : "No")
+            """
+        }
+    }
+
+    private func cameraPositionText(
+        _ position: AVCaptureDevice.Position
+    ) -> String {
+        switch position {
+        case .front:
+            return "Front"
+
+        case .back:
+            return "Back"
+
+        case .unspecified:
+            return "Unspecified"
+
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    // MARK: - Microphone Capability Test
+
+    func testMicrophoneCapability() {
+        let authorizationStatus =
+            AVCaptureDevice.authorizationStatus(for: .audio)
+
+        guard authorizationStatus == .authorized else {
+            microphoneTestStatus = "Permission Not Granted"
+            microphoneResults = [
+                "Microphone permission must be granted before testing."
+            ]
+            return
+        }
+
+        microphoneTestStatus = "Testing..."
+        microphoneResults = []
+
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .microphone
+            ],
+            mediaType: .audio,
+            position: .unspecified
+        )
+
+        let devices = discoverySession.devices
+
+        guard !devices.isEmpty else {
+            microphoneTestStatus = "No Microphone Device"
+            microphoneResults = [
+                "Microphone permission: Granted",
+                "AVCaptureDevice detected: No",
+                "Environment: iOS Simulator",
+                "Result: Simulator microphone input unavailable"
+            ]
+            return
+        }
+
+        microphoneTestStatus = "Success - \(devices.count) device(s)"
+
+        microphoneResults = devices.map { device in
+            """
+            Device: \(device.localizedName)
+            Connected: \(device.isConnected ? "Yes" : "No")
+            """
+        }
     }
 
     // MARK: - Refresh Permission Status
