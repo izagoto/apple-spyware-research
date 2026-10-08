@@ -1,6 +1,4 @@
-cat > README.md <<'EOF'
-
-# AppleSpywareResearch
+AppleSpywareResearch
 
 AppleSpywareResearch is a security research project for studying application permissions, protected data access, platform security boundaries, and exploit-chain concepts within Apple platforms.
 
