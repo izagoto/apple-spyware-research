@@ -1,3 +1,4 @@
+
 import AVFoundation
 import Combine
 import Contacts
@@ -22,11 +23,16 @@ final class PermissionManager: NSObject, ObservableObject {
 
     @Published var contactResults: [String] = []
     @Published var contactsReadStatus = "Not Tested"
-    
+
     // MARK: - Photos Research
 
     @Published var photoResults: [String] = []
     @Published var photosReadStatus = "Not Tested"
+
+    // MARK: - Location Research
+
+    @Published var locationResults: [String] = []
+    @Published var locationReadStatus = "Not Tested"
 
     // MARK: - Managers
 
@@ -40,6 +46,7 @@ final class PermissionManager: NSObject, ObservableObject {
         super.init()
 
         locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
 
         refreshStatuses()
     }
@@ -65,7 +72,6 @@ final class PermissionManager: NSObject, ObservableObject {
             let status = await PHPhotoLibrary.requestAuthorization(
                 for: .readWrite
             )
-
             photosStatus = photoStatusText(status)
         }
     }
@@ -76,7 +82,6 @@ final class PermissionManager: NSObject, ObservableObject {
                 let granted = try await contactStore.requestAccess(
                     for: .contacts
                 )
-
                 contactsStatus = granted ? "Granted" : "Denied"
             } catch {
                 contactsStatus = "Failed"
@@ -92,7 +97,6 @@ final class PermissionManager: NSObject, ObservableObject {
         Task {
             do {
                 let granted = try await eventStore.requestFullAccessToEvents()
-
                 calendarStatus = granted ? "Granted" : "Denied"
             } catch {
                 calendarStatus = "Failed"
@@ -121,7 +125,6 @@ final class PermissionManager: NSObject, ObservableObject {
                 contactResults = results
                 contactsReadStatus =
                     "Success - \(results.count) contact(s)"
-
             } catch {
                 contactResults = []
                 contactsReadStatus =
@@ -132,7 +135,6 @@ final class PermissionManager: NSObject, ObservableObject {
 
     private nonisolated static func fetchContacts() async throws -> [String] {
         try await Task.detached(priority: .userInitiated) {
-
             let store = CNContactStore()
 
             let keysToFetch: [CNKeyDescriptor] = [
@@ -148,15 +150,10 @@ final class PermissionManager: NSObject, ObservableObject {
 
             var results: [String] = []
 
-            try store.enumerateContacts(
-                with: request
-            ) { contact, _ in
-
+            try store.enumerateContacts(with: request) { contact, _ in
                 let fullName =
                     "\(contact.givenName) \(contact.familyName)"
-                    .trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    )
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 let phoneNumbers = contact.phoneNumbers.map {
                     $0.value.stringValue
@@ -183,10 +180,9 @@ final class PermissionManager: NSObject, ObservableObject {
             }
 
             return results
-
         }.value
     }
-    
+
     // MARK: - Photos Data Access Test
 
     func readPhotos() {
@@ -201,26 +197,20 @@ final class PermissionManager: NSObject, ObservableObject {
         }
 
         let assets = PHAsset.fetchAssets(with: nil)
-
         var results: [String] = []
 
         assets.enumerateObjects { asset, _, _ in
-
             let mediaType: String
 
             switch asset.mediaType {
             case .image:
                 mediaType = "Image"
-
             case .video:
                 mediaType = "Video"
-
             case .audio:
                 mediaType = "Audio"
-
             case .unknown:
                 mediaType = "Unknown"
-
             @unknown default:
                 mediaType = "Unknown"
             }
@@ -243,32 +233,43 @@ final class PermissionManager: NSObject, ObservableObject {
             "Success - \(results.count) asset(s)"
     }
 
+    // MARK: - Location Data Access Test
+
+    func readLocation() {
+        let authorizationStatus = locationManager.authorizationStatus
+
+        guard authorizationStatus == .authorizedWhenInUse ||
+              authorizationStatus == .authorizedAlways else {
+            locationReadStatus = "Permission Not Granted"
+            locationResults = [
+                "Grant Location permission before reading."
+            ]
+            return
+        }
+
+        locationReadStatus = "Reading..."
+        locationResults = []
+
+        locationManager.requestLocation()
+    }
+
     // MARK: - Refresh Permission Status
 
     func refreshStatuses() {
-
         cameraStatus = cameraStatusText(
-            AVCaptureDevice.authorizationStatus(
-                for: .video
-            )
+            AVCaptureDevice.authorizationStatus(for: .video)
         )
 
-        microphoneStatus = microphoneStatusText(
-            AVCaptureDevice.authorizationStatus(
-                for: .audio
-            )
+        microphoneStatus = cameraStatusText(
+            AVCaptureDevice.authorizationStatus(for: .audio)
         )
 
         photosStatus = photoStatusText(
-            PHPhotoLibrary.authorizationStatus(
-                for: .readWrite
-            )
+            PHPhotoLibrary.authorizationStatus(for: .readWrite)
         )
 
         contactsStatus = contactStatusText(
-            CNContactStore.authorizationStatus(
-                for: .contacts
-            )
+            CNContactStore.authorizationStatus(for: .contacts)
         )
 
         locationStatus = locationStatusText(
@@ -276,44 +277,27 @@ final class PermissionManager: NSObject, ObservableObject {
         )
 
         calendarStatus = calendarStatusText(
-            EKEventStore.authorizationStatus(
-                for: .event
-            )
+            EKEventStore.authorizationStatus(for: .event)
         )
     }
 
-    // MARK: - Camera Status
+    // MARK: - Camera & Microphone Status
 
     private func cameraStatusText(
         _ status: AVAuthorizationStatus
     ) -> String {
-
         switch status {
-
         case .authorized:
             return "Granted"
-
         case .denied:
             return "Denied"
-
         case .restricted:
             return "Restricted"
-
         case .notDetermined:
             return "Not Requested"
-
         @unknown default:
             return "Unknown"
         }
-    }
-
-    // MARK: - Microphone Status
-
-    private func microphoneStatusText(
-        _ status: AVAuthorizationStatus
-    ) -> String {
-
-        return cameraStatusText(status)
     }
 
     // MARK: - Photos Status
@@ -321,24 +305,17 @@ final class PermissionManager: NSObject, ObservableObject {
     private func photoStatusText(
         _ status: PHAuthorizationStatus
     ) -> String {
-
         switch status {
-
         case .authorized:
             return "Granted"
-
         case .limited:
             return "Limited"
-
         case .denied:
             return "Denied"
-
         case .restricted:
             return "Restricted"
-
         case .notDetermined:
             return "Not Requested"
-
         @unknown default:
             return "Unknown"
         }
@@ -349,24 +326,17 @@ final class PermissionManager: NSObject, ObservableObject {
     private func contactStatusText(
         _ status: CNAuthorizationStatus
     ) -> String {
-
         switch status {
-
         case .authorized:
             return "Granted"
-
         case .denied:
             return "Denied"
-
         case .restricted:
             return "Restricted"
-
         case .notDetermined:
             return "Not Requested"
-
         case .limited:
             return "Limited"
-
         @unknown default:
             return "Unknown"
         }
@@ -377,24 +347,17 @@ final class PermissionManager: NSObject, ObservableObject {
     private func locationStatusText(
         _ status: CLAuthorizationStatus
     ) -> String {
-
         switch status {
-
         case .authorizedWhenInUse:
             return "When In Use"
-
         case .authorizedAlways:
             return "Always"
-
         case .denied:
             return "Denied"
-
         case .restricted:
             return "Restricted"
-
         case .notDetermined:
             return "Not Requested"
-
         @unknown default:
             return "Unknown"
         }
@@ -405,24 +368,17 @@ final class PermissionManager: NSObject, ObservableObject {
     private func calendarStatusText(
         _ status: EKAuthorizationStatus
     ) -> String {
-
         switch status {
-
         case .fullAccess:
             return "Granted"
-
         case .writeOnly:
             return "Write Only"
-
         case .denied:
             return "Denied"
-
         case .restricted:
             return "Restricted"
-
         case .notDetermined:
             return "Not Requested"
-
         @unknown default:
             return "Unknown"
         }
@@ -439,5 +395,35 @@ extension PermissionManager: CLLocationManagerDelegate {
         locationStatus = locationStatusText(
             manager.authorizationStatus
         )
+    }
+
+    func locationManager(
+        _ manager: CLLocationManager,
+        didUpdateLocations locations: [CLLocation]
+    ) {
+        guard let location = locations.last else {
+            locationReadStatus = "No Location Available"
+            locationResults = []
+            return
+        }
+
+        locationReadStatus = "Success"
+
+        locationResults = [
+            "Latitude: \(location.coordinate.latitude)",
+            "Longitude: \(location.coordinate.longitude)",
+            "Accuracy: \(location.horizontalAccuracy) meters",
+            "Timestamp: \(location.timestamp.formatted())"
+        ]
+    }
+
+    func locationManager(
+        _ manager: CLLocationManager,
+        didFailWithError error: Error
+    ) {
+        locationReadStatus = "Failed"
+        locationResults = [
+            error.localizedDescription
+        ]
     }
 }

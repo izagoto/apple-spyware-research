@@ -112,6 +112,39 @@ struct ContentView: View {
                         }
                     }
                 }
+
+                // MARK: - Location Data Access
+
+                Section("Location Data Access") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Location Read Test")
+                                .font(.headline)
+
+                            Text(permissions.locationReadStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Read Location") {
+                            permissions.readLocation()
+                        }
+                    }
+
+                    if !permissions.locationResults.isEmpty {
+                        ForEach(
+                            Array(permissions.locationResults.enumerated()),
+                            id: \.offset
+                        ) { _, result in
+                            Text(result)
+                                .font(.callout)
+                                .textSelection(.enabled)
+                                .padding(.vertical, 4)
+                        }
+                    }
+                }
             }
             .navigationTitle("Permission Research")
             .toolbar {
